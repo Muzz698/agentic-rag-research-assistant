@@ -1,7 +1,6 @@
 # 🤖 Agentic RAG Research Assistant
 
-A portfolio-ready **Retrieval-Augmented Generation (RAG) + Agentic AI** application that lets users upload documents and ask grounded questions. It combines local embeddings, ChromaDB retrieval, a LangGraph workflow, safe calculator and web-research tools, and either a local Ollama model or optional Groq cloud inference.
-
+A portfolio-ready **Retrieval-Augmented Generation (RAG) + Agentic AI** application that lets users upload documents and ask grounded questions. It combines local embeddings, ChromaDB retrieval, a LangGraph workflow, safe calculator and web-research tools, through a local Ollama model.
 
 ## ✨ Features
 
