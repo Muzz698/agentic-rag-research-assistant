@@ -27,31 +27,11 @@ def get_embeddings():
 
 
 def get_vectorstore():
-    """Return a Chroma vector store pointing at CHROMA_DIR.
-
-    Ensures the underlying Chroma collection is configured to use cosine
-    (hnsw:space = 'cosine') so distance values returned by Chroma match the
-    code's expectation of cosine-style distances.
-    """
-    # Create/connect a chromadb client that uses the same persist directory and
-    # ensure the collection exists with the correct HNSW space metadata. This
-    # avoids accidentally creating a collection that uses L2 distance.
-    settings = ChromaSettings(chroma_db_impl="duckdb+parquet", persist_directory=CHROMA_DIR)
-    client = chromadb.Client(settings=settings)
-
-    # Ask chroma to create the collection with cosine HNSW space if it doesn't exist.
-    try:
-        client.get_or_create_collection(name=COLLECTION, metadata={"hnsw:space": "cosine"})
-    except Exception:
-        # Be tolerant: if the client or collection already exists with other settings
-        # this call may raise — in that case continue and rely on the existing store.
-        pass
-
-    # Return the LangChain Chroma wrapper pointed at the same persist directory.
     return Chroma(
         collection_name=COLLECTION,
         embedding_function=get_embeddings(),
         persist_directory=CHROMA_DIR,
+        collection_metadata={"hnsw:space": "cosine"},
     )
 
 
@@ -112,25 +92,8 @@ def retrieve_context(query: str, k: int = 4):
     pairs = vs.similarity_search_with_score(query, k=k)
     results = []
     for doc, distance in pairs:
-        # Chroma may be using either a "cosine"-style distance (distance = 1 - cos)
-        # or an L2 (Euclidean) distance depending on how the collection was created.
-        # When embeddings are normalized (normalize_embeddings=True) the relation
-        # between L2 and cosine is: ||u-v||^2 = 2 - 2*cos -> cos = 1 - 0.5 * ||u-v||^2
-        # To be robust we compute both conversions and take the one that yields the
-        # higher similarity (after clipping to [0,1]). This handles collections
-        # created with either metric.
-        try:
-            d = float(distance)
-        except Exception:
-            d = 1.0
-
-        # Option A: assume Chroma returned cosine-style distance (distance = 1 - cos)
-        cos_from_cosine = 1.0 - d
-        # Option B: assume Chroma returned L2 distance between normalized vectors
-        cos_from_l2 = 1.0 - 0.5 * (d ** 2)
-
-        similarity = max(0.0, min(1.0, max(cos_from_cosine, cos_from_l2)))
-
+        # With normalized embeddings and Chroma distance, lower is better.
+        similarity = max(0.0, min(1.0, 1.0 - float(distance)))
         results.append(
             {
                 "text": doc.page_content,

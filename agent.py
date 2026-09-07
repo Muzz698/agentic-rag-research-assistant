@@ -105,11 +105,6 @@ def _extract_math(query: str) -> str:
     return expression
 
 
-def retrieve_node(state: AgentState):
-    context = retrieve_context(state["query"], k=4)
-    return {"context": context, "sources": context}
-
-
 def route_node(state: AgentState):
     query = state["query"]
     if _needs_web(query):
@@ -119,6 +114,16 @@ def route_node(state: AgentState):
     else:
         route = "rag"
     return {"route": route}
+
+
+def _route_decision(state: AgentState) -> str:
+    # Reads the route chosen by route_node and picks which branch to run next.
+    return state["route"]
+
+
+def retrieve_node(state: AgentState):
+    context = retrieve_context(state["query"], k=4)
+    return {"context": context, "sources": context}
 
 
 def tool_node(state: AgentState):
@@ -177,13 +182,22 @@ Rules:
 
 def _build_graph():
     graph = StateGraph(AgentState)
-    graph.add_node("retrieve", retrieve_node)
     graph.add_node("route", route_node)
+    graph.add_node("retrieve", retrieve_node)
     graph.add_node("tool", tool_node)
     graph.add_node("generate", generate_node)
-    graph.add_edge(START, "retrieve")
-    graph.add_edge("retrieve", "route")
-    graph.add_edge("route", "tool")
+
+    graph.add_edge(START, "route")
+    graph.add_conditional_edges(
+        "route",
+        _route_decision,
+        {
+            "rag": "retrieve",
+            "calculator": "tool",
+            "web_research": "tool",
+        },
+    )
+    graph.add_edge("retrieve", "generate")
     graph.add_edge("tool", "generate")
     graph.add_edge("generate", END)
     return graph.compile()
